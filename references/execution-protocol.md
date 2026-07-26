@@ -21,7 +21,7 @@ context stays small. When in doubt, fewer better tokens beats more agents.
 Sub-agents / skills / plugins earn their cost by keeping bulky reading **out of your window**, not by
 looking busy:
 
-- **Read-heavy phases** (P1 extraction, P3 judgement, research sweeps, large-surface search) → dispatch
+- **Read-heavy phases** (P1 harvest, P3 judgement, research sweeps, large-surface search) → dispatch
   to sub-agents (Task/Agent tool, `Explore` agent) under §Sub-agents: batch by role, strict schema,
   hard token cap, store only the structured return. Their reading never enters your context.
 - **A grep or a test settles it?** Do it inline. A sub-agent is ~1000× the cost of a grep for the same
@@ -32,6 +32,35 @@ looking busy:
 
 Reconciliation, stated plainly: every spawn/skill call must **remove more tokens from your context than
 it adds**. If it doesn't, do it inline.
+
+**The harvest is the clearest case of the trade.** Sub-agents let the corpus be read exhaustively while
+your window grows only by JSONL — a 500k-token doc set harvested inside a small orchestrator context.
+That is what buys recall the old pattern-matching extractor could not have, and it is worth paying for
+in exactly one phase. Send shards, not files; receive rows, not reasoning. See
+`references/harvest-protocol.md`.
+
+## Make the gates non-bypassable (hooks)
+
+A gate the agent runs voluntarily is a gate the agent can forget under budget pressure — at the exact
+moment forgetting is most tempting. On a Claude Code host, wire it into the harness instead. A `Stop`
+hook runs when the agent tries to end its turn, and a non-zero exit blocks the stop and feeds stderr
+back to the model:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command",
+                     "command": "python scripts/fold.py --ledger audit/ledger.jsonl --verdicts audit/verdicts.jsonl --out audit/REPORT.md >&2 || exit 2" } ] }
+    ]
+  }
+}
+```
+
+Exit 2 blocks; the gate's own error list becomes the agent's next instruction. Now "done" is enforced
+by the runtime rather than asserted by the thing being judged — the same reason §1's APPROVAL gate is
+scoped at the session, not promised in prose. Keep the hook cheap: it fires on every stop, so it must
+be a script exit code, never a model call.
 
 ## Token discipline is non-negotiable (§4)
 

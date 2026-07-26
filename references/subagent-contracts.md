@@ -75,6 +75,23 @@ Output schema:
 inferred from reading. A verdict with an empty `proof_cmd` is a reading, not a verification — the
 orchestrator should downgrade it.
 
+## Producers versus judges
+
+The contract above is for **judges** — workers that return a verdict on an item that already exists.
+A **producer** creates the ledger rows in the first place, and it needs the inverse bias.
+
+A judge should be conservative: an unsupported PASS is the failure that ships. A harvester should be
+liberal: it is populating the scope everything downstream is measured against, so a missed row is
+never audited at all, while a spurious one is discarded by a single grep in the deterministic sweep.
+Briefing a harvester with a judge's caution is how a corpus quietly halves.
+
+Producers therefore get three things judges do not: an explicit **recall-over-precision** instruction,
+a **verbatim** constraint (the artifact is other people's words, not the agent's), and a **coverage
+record per assigned unit** so silence is distinguishable from emptiness. Full harvester contract in
+`references/harvest-protocol.md`.
+
+Both kinds still return JSONL, both are capped, and neither spawns.
+
 ## Escalation without loops
 
 Cross-role BLOCKED items get **exactly one** re-spawn to the named role, then stay BLOCKED. Without

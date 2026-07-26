@@ -60,7 +60,9 @@ In order of preference:
 
 1. **Harvest.** Search the repo and docs for criteria already written: `Gate:`, `AC:`, `MUST`, `SHALL`,
    definition-of-done, acceptance checkboxes, existing test names, CI gate configs. Most teams have
-   these and have forgotten.
+   these and have forgotten. Search for meaning, not for labels — most binding criteria are unlabelled
+   prose, a table cell, a comment, or a test name, and a keyword sweep reports the labelled minority as
+   though it were the set. `references/harvest-protocol.md` is how to do this with measurable recall.
 2. **Make the first phase build it.** P1 writes the failing test, the benchmark harness, or the
    invariant checker; later phases must make it pass. Slower, and it converts an unverifiable job
    into a verifiable one — usually worth it.

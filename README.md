@@ -18,6 +18,20 @@ job the design is a copy-paste-ready, *loop-engineered* **contract**:
 The completion gate is real code, not a promise: `fold_ledger.py` exits non-zero on any missing,
 duplicate, unproven, or non-terminal row — so "done" is a fact, not a claim.
 
+## Scripts enumerate and verify; the model interprets
+
+Deciding what counts as a requirement is judgement, and pattern-matching for `Gate:` and `MUST` finds
+only the labelled minority — silently, so the count it prints reads as coverage. Deciding what text
+exists, and proving a harvested claim is really in it, are mechanical.
+
+So the boundary sits between them. `index_corpus.py` shards every readable line of the corpus and
+prints what it could not read; it filters nothing, so it cannot drop a source. Sub-agents read the
+shards and harvest requirements from prose, tables, tests, comments, and CI configs. Then
+`verify_harvest.py` proves every claim appears **verbatim at its cited `path:line`** and that **every
+shard was accounted for** — a paraphrase, an invention, or an unread file is a non-zero exit. A bounded
+adversarial sweep measures what the harvest still missed, and that find-rate is reported as the recall
+estimate rather than rounded up to "complete".
+
 ## Install
 
 ```bash
@@ -33,6 +47,7 @@ PR review, backfill, research sweep, …).
 |---|---|
 | `SKILL.md` | Entry point — the triage front-door and the contract workflow. |
 | `references/contract-template.md` | The fill-in contract skeleton. |
+| `references/harvest-protocol.md` | Index → sharded harvest → grounding gate → recall sweep. |
 | `references/oracle-catalog.md` | Oracles by job type; what to do when there is none. |
 | `references/subagent-contracts.md` | Sub-agent role design, spawn contract, output schema. |
 | `references/token-policy.md` | The token arithmetic and the binding rules. |
@@ -40,5 +55,6 @@ PR review, backfill, research sweep, …).
 | `references/outer-loops.md` | Trajectory metrics, `pass^k`, Loop 4 hill-climbing. |
 | `references/triage-routing.md` | The route-else-design front-door rubric. |
 | `references/worked-example.md` | An annotated spec-conformance audit contract. |
-| `scripts/extract_requirements.py` | Harvest acceptance criteria from docs → ledger (zero tokens). |
+| `scripts/index_corpus.py` | Enumerate every readable line into a shard manifest — the coverage contract. |
+| `scripts/verify_harvest.py` | The grounding + coverage gate: verbatim claims, no unread shards. |
 | `scripts/fold_ledger.py` | The deterministic fold + completion gate. |

@@ -115,6 +115,14 @@ The moment an agent restates a criterion in its own words, it has softened it �
 criterion is how a false PASS gets manufactured. Verbatim criteria are the cheapest accuracy win
 available, and most users do not realize they are sitting on them.
 
+Two failures matter here and they pull in opposite directions. **Softening** is a precision failure —
+defeated by grounding every claim at `path:line`. **Missing** a criterion is a recall failure, and it
+is the more expensive of the two: an unharvested requirement is not audited at all, so the report says
+SHIP about a scope that was never checked. Most criteria are not labelled — they are prose, a table
+cell, a test name, a CI gate, a code comment. Pattern-matching for `Gate:` finds the labelled minority
+and reports a confident count for the rest. Design the harvest for recall first, then make precision a
+mechanical check: `references/harvest-protocol.md`.
+
 ### 3. Write the contract
 
 Read `references/contract-template.md` and fill every section. Do not drop sections because the job
@@ -124,19 +132,32 @@ Adapt the vocabulary to the user's domain. If their docs say "episodes" and "sea
 the contract says those words. A contract in the user's own language gets followed; a generic one
 gets skimmed.
 
-### 4. Emit the helper scripts when they apply
+### 4. Emit the harvest protocol and the gates
 
-If the job has extractable criteria or a ledger, also emit:
+The rule for what becomes a script and what becomes a phase: **scripts enumerate and verify; the model
+interprets.** Enumeration and byte-comparison are mechanical and must not be left to judgement.
+Recognising a requirement in prose is judgement and must not be left to a pattern.
 
-- `scripts/extract_requirements.py` — pulls `Gate:` lines, checkboxes, and MUST/SHALL statements out of
-  markdown into `ledger.jsonl`. Zero tokens, zero hallucination.
+If the job has criteria to harvest or a ledger, emit all three, copied from this skill's `scripts/`:
+
+- `scripts/index_corpus.py` — shards every readable line of the corpus into `shards.jsonl` and prints
+  what it could not read. It filters nothing, so it cannot silently drop a source. This manifest is
+  the coverage contract for the whole harvest.
+- `scripts/verify_harvest.py` — proves every ledger `claim` appears **verbatim at its cited
+  `path:line`**, and that **every shard has an explicit disposition**. Non-zero on a paraphrase, an
+  invention, or a shard nobody read. This is what makes model-driven extraction safer than a regex,
+  not merely broader.
 - `scripts/fold_ledger.py` — joins ledger + verdicts into a report, and **exits non-zero on any missing,
   duplicate, or non-terminal row**. That non-zero exit is the completion gate; it is what makes
   "done" a fact rather than a claim.
 
-Copy them from this skill's `scripts/`, adjusting the extraction patterns to the user's actual doc
-conventions. Emitting them here means the target agent spends its budget on judgement instead of
-on writing plumbing.
+Then write P1 as the harvest itself — sharded sub-agents under the spawn contract in
+`references/harvest-protocol.md`, followed by the grounding gate and a bounded adversarial recall
+sweep whose find-rate is reported as the recall estimate. The scripts are unmodified between jobs;
+what you adapt per job is the corpus paths and the harvester's notion of what constrains *this*
+implementation.
+
+Emitting these means the target agent spends its budget on judgement instead of on writing plumbing.
 
 ### 5. Deliver
 
@@ -259,6 +280,12 @@ exempt from "don't ask" exactly like the §1 APPROVAL gate.
 - Doing the job instead of writing the contract.
 - A contract with no oracle — it produces confident nonsense at scale.
 - Paraphrasing the user's existing acceptance criteria.
+- Pattern-matching for requirements and reporting the match count as coverage. A regex finds the
+  labelled minority and is silent about everything else; the silence reads as an empty document.
+- Reporting a harvest as "complete" without the five figures that make it checkable — shards, rows,
+  ungrounded, unharvested, sweep find-rate.
+- A model where a script belongs (a completion gate an agent can argue with) or a script where a model
+  belongs (a pattern deciding what counts as a requirement).
 - Sub-agents for a job that a `rg` and a test run would settle.
 - A token policy written as suggestions ("try to avoid...") rather than constraints.
 - Advising the user to paste the contract as a chat message.
@@ -268,6 +295,7 @@ exempt from "don't ask" exactly like the §1 APPROVAL gate.
 
 - `references/triage-routing.md` — the front-door: route a raw need to the best existing capability, or decide to design/contract. Read first when handed a rough need.
 - `references/contract-template.md` — the fill-in skeleton. Read before writing any contract.
+- `references/harvest-protocol.md` — how P1 gets its ledger: index → sharded harvest → grounding gate → recall sweep. Read whenever the job has criteria to extract.
 - `references/oracle-catalog.md` — oracles by job type; what to do when there is none.
 - `references/subagent-contracts.md` — role design, spawn contract, output schema.
 - `references/token-policy.md` — the arithmetic, and the binding rules to copy in.

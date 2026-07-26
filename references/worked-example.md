@@ -28,10 +28,15 @@ Six requirements, three of them in tension. What follows is how each was transla
 
 **Their `Gate:` lines became the oracle.** The roadmap already had a `Gate:` line per epic — pre-written,
 ratified acceptance criteria. Every one entered the ledger **verbatim**. This was the highest-leverage
-move available and it cost nothing: the criteria already existed, and the only real risk was an agent
-paraphrasing them into something softer.
+move available and it cost nothing: the criteria already existed.
 
-Generalisation: before designing any oracle, search for one the user already wrote.
+The risk here is two-sided, and only one side is obvious. Paraphrasing a `Gate:` line softens it — that
+is the visible risk, and grounding every claim at `path:line` kills it. The invisible one is that the
+labelled lines are not the whole spec: harvest only what is labelled and you inherit a scope that looks
+complete and is not. Both sides need an answer, and they need different ones.
+
+Generalisation: before designing any oracle, search for one the user already wrote — then assume the
+labelled ones are the minority.
 
 **Deterministic sweep before the expensive panel.** Roughly two thirds of rows reduce to "does this
 symbol exist, is it called, does this test pass, does this constant equal the ratified value" — all
@@ -48,17 +53,25 @@ at a time in P1. Opened once in full, it re-bills every subsequent turn — the 
 ## Phase shape
 
 ```
-P0  deterministic recon      gh pr view / rg for Gate: lines / symbol map     ~0 tokens
-P1  requirement extraction   roadmap + decisions full; spec by section        expensive, necessarily
+P0  deterministic recon      gh pr view / index_corpus.py / symbol map        ~0 tokens
+P1  harvest                  sharded harvesters -> ground -> recall sweep     expensive, necessarily
 P2  deterministic sweep      rg / tests / typecheck per row                   ~0 tokens, ~65% of rows
 P3  seat panel               one batched spawn per seat, only OPEN rows       the real cost
 P4  adversarial              their own red-team table, run against the code   medium
 P5  fold                     script joins ledger+verdicts, non-zero on gaps   ~0 tokens
 ```
 
-P1 is deliberately the expensive phase and its gate is deliberately strict — it prints a count per
-category and treats any zero as extraction failure. An incomplete ledger means every later phase
-audits the wrong thing with full confidence. **P1 is not where to economise.**
+P1 is deliberately the expensive phase and its gate is deliberately strict. An incomplete ledger means
+every later phase audits the wrong thing with full confidence. **P1 is not where to economise** — and
+the first version of this skill economised there anyway, extracting with regexes over markdown. It
+found the roadmap's labelled `Gate:` lines and silently missed the invariants that lived in prose, in
+the migration files, and in three test names. The count it printed looked like coverage.
+
+The fix was not a better regex. It was moving the boundary: `index_corpus.py` enumerates every line of
+the corpus (it filters nothing, so it cannot drop a source), harvester sub-agents read the shards and
+judge what constrains the implementation, and `verify_harvest.py` proves every returned claim really
+appears verbatim at its cited line and that no shard went unread. Recall from the model, precision from
+a byte comparison. See `references/harvest-protocol.md`.
 
 ## The gate that makes "done" a fact
 
