@@ -1,5 +1,7 @@
 # Sources
 
+> For what these sources add up to, see [LOOP-ENGINEERING.md](LOOP-ENGINEERING.md); for how this skill
+> measures against them, [REQUIREMENTS.md](REQUIREMENTS.md).
 Every empirical claim this skill makes, and where it comes from. Claims are tagged:
 
 - **[E]** established — primary source: a paper, official documentation, or an engineering write-up by

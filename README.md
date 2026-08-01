@@ -3,9 +3,23 @@
 A [Claude Code](https://docs.claude.com/en/docs/claude-code) skill that turns a rough, long-running task
 into something an agent can actually finish — and **proves** it finished, rather than saying so.
 
-The problem it exists for: an agent asked to "implement the remaining tasks" will produce a plan, do the
-three easy items, add one test, and report success. Every part of that is individually defensible and
-the whole is a failure. This skill makes that failure *structurally hard*.
+It is a direct implementation of **loop engineering**: the discipline of designing the *loop* an agent
+runs in, rather than the prompt inside it. An agent is just a model in a cycle — look at state, act,
+observe, repeat — and the quality difference between agents rarely comes from the model. It comes from
+how that cycle terminates, verifies, and recovers.
+
+The law the whole skill is built on:
+
+> **An agent's power is not bounded by its model. It is bounded by its verifier.**
+
+How long a loop can safely run unattended is proportional to the quality of the check that tells it
+whether it succeeded. Everything else is marginal optimisation. See
+**[docs/LOOP-ENGINEERING.md](docs/LOOP-ENGINEERING.md)** for the discipline in full — the five failure
+modes, the nested loops, and why each rule below follows from one of them.
+
+The concrete failure it exists to prevent: an agent asked to "implement the remaining tasks" produces a
+plan, does the three easy items, adds one test, and reports success. Every part is individually
+defensible; the whole is a failure. This skill makes that *structurally* hard.
 
 ```
 you: "implement all 42 tasks and fix the issues"
@@ -101,6 +115,7 @@ a scope smaller than the source · a red oracle. Run `--remaining` for the resum
 | `skills/loop-contract/references/worked-example.md` | an annotated spec-conformance audit |
 | `skills/loop-contract/scripts/fold_ledger.py` | the gate |
 | `skills/loop-contract/scripts/extract_requirements.py` | a recall net over markdown — **not** the extractor |
+| `docs/LOOP-ENGINEERING.md` | the discipline this implements — failure modes, the central law, nested loops |
 | `docs/REQUIREMENTS.md` | the 32-requirement conformance matrix, and what is out of scope |
 | `docs/SOURCES.md` | every empirical claim, its source, and which are house heuristics |
 
@@ -109,14 +124,21 @@ directory is usually gitignored, and the artifact must outlive the run.
 
 ## Design principles
 
-1. **An agent's reliability is bounded by its verifier, not its model.**
+Each is a consequence of a named failure mode, not a style preference — the mapping is in
+[docs/LOOP-ENGINEERING.md §6](docs/LOOP-ENGINEERING.md).
+
+1. **An agent's reliability is bounded by its verifier, not its model.** Find the oracle before
+   anything else; if there is no answer to "how will we know", do not grant the capability.
 2. **The model reads and decides; a script confirms the result.** Comprehension is semantic and belongs
-   to the model; verification must be ungameable and belongs to code. Reversing this is how a 42-task
+   to the model. Verification must be ungameable and belongs to code. Reversing this is how a 42-task
    job silently becomes 35.
 3. **Completion must be unsatisfiable by documentation.** The oracle is written red before the work, so
    no amount of eloquent reporting turns it green.
-4. **A partial result with honest gaps beats a complete-looking one with invented passes.** `BLOCKED`
+4. **Recovery beats prevention.** Per-step reliability multiplies across a long chain and collapses;
+   a gate at every phase boundary breaks the multiplication.
+5. **A partial result with honest gaps beats a complete-looking one with invented passes.** `BLOCKED`
    with a reason is a legitimate output; a false `PASS` is the only unacceptable one.
+
 
 ## Honest limitations
 
