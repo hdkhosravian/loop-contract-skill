@@ -39,11 +39,22 @@ relations are oracles too — a job with no test suite is rarely a job with no o
 
 ## Install
 
+**As a Claude Code plugin** (recommended — one command, updates with `/plugin`):
+
+```
+/plugin marketplace add hdkhosravian/loop-contract-skill
+/plugin install loop-contract@loop-contract
+```
+
+**Or manually**, if you prefer a plain skill directory:
+
 ```bash
-git clone git@github.com:hdkhosravian/loop-contract-skill.git ~/.claude/skills/loop-contract
+git clone https://github.com/hdkhosravian/loop-contract-skill /tmp/lc \
+  && cp -r /tmp/lc/skills/loop-contract ~/.claude/skills/
 ```
 
 Then just describe the work. `/loop-contract` also works, but is rarely needed.
+
 
 ## Using it
 
@@ -78,18 +89,18 @@ a scope smaller than the source · a red oracle. Run `--remaining` for the resum
 
 | Path | What |
 |---|---|
-| `SKILL.md` | entry point — triage, the DONE/KNOWN axis, the workflow |
-| `references/contract-template.md` | the contract skeleton |
-| `references/oracle-catalog.md` | the eight-rung oracle ladder; anti-oracles; oracles without tests |
-| `references/token-policy.md` | the cost arithmetic and the binding rules |
-| `references/subagent-contracts.md` | roles, spawn contract, coverage panel vs repeatability |
-| `references/triage-routing.md` | route / do-it / contract, and splitting a mixed request |
-| `references/outer-loops.md` | trajectory metrics, `pass^k`, hill-climbing across runs |
-| `references/recurring-jobs.md` | a contract on a schedule; the delta is the deliverable |
-| `references/execution-protocol.md` | running a contract on a Claude Code host |
-| `references/worked-example.md` | an annotated spec-conformance audit |
-| `scripts/fold_ledger.py` | the gate |
-| `scripts/extract_requirements.py` | a recall net over markdown — **not** the extractor |
+| `skills/loop-contract/SKILL.md` | entry point — triage, the DONE/KNOWN axis, the workflow |
+| `skills/loop-contract/references/contract-template.md` | the contract skeleton |
+| `skills/loop-contract/references/oracle-catalog.md` | the eight-rung oracle ladder; anti-oracles; oracles without tests |
+| `skills/loop-contract/references/token-policy.md` | the cost arithmetic and the binding rules |
+| `skills/loop-contract/references/subagent-contracts.md` | roles, spawn contract, coverage panel vs repeatability |
+| `skills/loop-contract/references/triage-routing.md` | route / do-it / contract, and splitting a mixed request |
+| `skills/loop-contract/references/outer-loops.md` | trajectory metrics, `pass^k`, hill-climbing across runs |
+| `skills/loop-contract/references/recurring-jobs.md` | a contract on a schedule; the delta is the deliverable |
+| `skills/loop-contract/references/execution-protocol.md` | running a contract on a Claude Code host |
+| `skills/loop-contract/references/worked-example.md` | an annotated spec-conformance audit |
+| `skills/loop-contract/scripts/fold_ledger.py` | the gate |
+| `skills/loop-contract/scripts/extract_requirements.py` | a recall net over markdown — **not** the extractor |
 | `docs/REQUIREMENTS.md` | the 32-requirement conformance matrix, and what is out of scope |
 | `docs/SOURCES.md` | every empirical claim, its source, and which are house heuristics |
 

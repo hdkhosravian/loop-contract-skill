@@ -1,0 +1,10 @@
+{
+  "name": "loop-contract",
+  "description": "Turns a rough, long-running request into a loop-engineered contract and then executes it — frozen scope counted from the source, an achievement oracle written red before the work, a distinct proof per item, and a completion gate that runs the oracle itself so \"done\" is a fact rather than a claim.",
+  "version": "1.0.0",
+  "author": { "name": "hdkhosravian" },
+  "homepage": "https://github.com/hdkhosravian/loop-contract-skill",
+  "repository": "https://github.com/hdkhosravian/loop-contract-skill",
+  "license": "MIT",
+  "keywords": ["agents","loop-engineering","verification","oracle","context-engineering","audit","migration","code-review","research","autonomy"]
+}

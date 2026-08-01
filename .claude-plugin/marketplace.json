@@ -1,0 +1,19 @@
+{
+  "name": "loop-contract",
+  "owner": { "name": "hdkhosravian", "url": "https://github.com/hdkhosravian" },
+  "metadata": {
+    "description": "A Claude Code skill for long-running agentic jobs that finish and can prove it.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "loop-contract",
+      "source": "./",
+      "description": "Loop-engineered contracts for multi-step jobs in any domain: scope frozen and counted from the source, an achievement oracle observed red before the work, per-item proofs, and a gate that executes the oracle rather than reading a claim about it.",
+      "version": "1.0.0",
+      "author": { "name": "hdkhosravian" },
+      "category": "productivity",
+      "keywords": ["agents","loop-engineering","verification","oracle","audit","migration","research"]
+    }
+  ]
+}
