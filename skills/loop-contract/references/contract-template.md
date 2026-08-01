@@ -97,10 +97,11 @@ deliverable, or every existing loop is complete (its gate exited 0). Re-running 
 job; continuing an unfinished one never is. If two candidates are plausible, list them in one line and
 ask — guessing here either orphans real work or corrupts a live ledger.
 
-**Never copy the scripts in.** Call the skill's canonical
-`~/.claude/skills/loop-contract/scripts/fold_ledger.py`. Copies drift: a repo has been observed running
-two different `fold_ledger.py` versions side by side, so the same ledger passed one gate and failed the
-other.
+**Never vendor the scripts.** Call the copy that ships with this skill — `scripts/fold_ledger.py`,
+alongside `SKILL.md` — resolved from wherever the skill is installed. That differs by install method
+(`~/.claude/skills/<name>/` for a manual install, the plugin cache for a `/plugin install`), so resolve
+it rather than hardcoding either. Copies drift: a repo has been observed running two different
+`fold_ledger.py` versions side by side, so the same ledger passed one gate and failed the other.
 
 First action: check whether `<dir>/PROGRESS.md` already exists.
 - If it does, this is a **resume**. Read it, then run
