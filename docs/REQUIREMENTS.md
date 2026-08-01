@@ -1,5 +1,7 @@
 # Loop-engineering requirements — and where this skill implements each
 
+> The discipline these requirements come from is explained in [LOOP-ENGINEERING.md](LOOP-ENGINEERING.md);
+> the evidence behind each claim is in [SOURCES.md](SOURCES.md).
 A conformance matrix. The canon is synthesised from the primary sources in `SOURCES.md`; the right-hand
 column is where the requirement actually lives here, so the claim is checkable rather than asserted.
 
