@@ -1,8 +1,11 @@
 # Multi-agent Coordination — the research, and the design that follows
 
-> Status: **research note and design proposal.** Nothing here is implemented. It exists to be argued with
-> before any code is written. For the discipline this extends see [LOOP-ENGINEERING.md](LOOP-ENGINEERING.md);
-> for how claims are tagged, [SOURCES.md](SOURCES.md).
+> Status: **implemented.** The gate checks live in `scripts/fold_ledger.py` (auto-detected board,
+> verified red→green by `tests/test_gate.py`); the operating procedure is
+> `skills/loop-contract/references/agent-comms.md`; the requirements are rows 33–39 of
+> [REQUIREMENTS.md](REQUIREMENTS.md). This document remains the evidence base and the rationale.
+> For the discipline this extends see [LOOP-ENGINEERING.md](LOOP-ENGINEERING.md); for how claims are
+> tagged, [SOURCES.md](SOURCES.md).
 
 The gap this closes: `loop-contract` says a great deal about *spawning* workers
 (`references/subagent-contracts.md`) and nothing about what happens *between* them once several are
@@ -639,28 +642,27 @@ Every change is additive; no existing contract changes behaviour.
 | 38 | Every inter-agent contradiction carries an adjudication, or the gate fails; a wrong fact is revocable by a superseding row | the only part of coordination a script can verify — and the answer to consensus inertia |
 | 39 | Coordination rules the host can enforce are enforced by the host, not requested in prose | capability lives in the runtime — already this repo's position on credentials |
 
-### 6.2 Requirement 39, concretely — and a bonus that closes an open item
+### 6.2 Requirement 39, concretely — zero configuration, by decision
 
-Four rules this repo currently *asks* for can be *enforced* today:
+Requirement 39's final form, fixed by the project owner: **coordination must need no user configuration
+at all.** No environment variables, no settings edits, no fixed agent counts, no flags a human types. The
+orchestrator decides the rung at triage, creates the board itself, derives the ceilings from the job
+(item count, role count) and writes them into the contract, and runs the gate itself. The gate
+**auto-detects** the board files beside the ledger; its flags exist only so the agent can override a
+nonstandard layout.
 
-- **`NO-SPAWN` (requirement 19) is currently fighting the runtime default.** Subagents nest three layers
-  deep unless told otherwise. Setting `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` to `1`, or omitting `Agent`
-  from a role's `tools`, makes the flat spawn ceiling real instead of conventional.
-- **Role authority becomes a tool allowlist.** "Read only your authority source" is prose; a
-  `disallowedTools` list on a read-only reviewer is enforcement. Denying `SendMessage` for roles that must
-  not talk makes law 5's cap structural.
-- **A malformed worker return can be rejected at the boundary.** `SubagentStop` blocks on exit 2 and
-  receives `last_assistant_message`, so a schema check can bounce a worker back to fix its own output
-  instead of the orchestrator repairing it downstream.
-- **Law 2's write contract can be a `PreToolUse` hook.** It blocks *and* can rewrite tool input, so a role
-  writing outside its declared paths is stopped **before** the write. That is the announce-before-execute
-  veto from §2.8, available today with no new infrastructure — and it is the difference between a write
-  contract that is documentation and one that holds.
+This supersedes an earlier draft of this section that recommended host-level enforcement requiring user
+configuration (`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` in settings, per-role `disallowedTools`,
+`SubagentStop`/`PreToolUse` hooks). Those mechanisms are real and documented, and a host that already
+enforces a depth cap by default is welcome — but the skill never *asks the user* to configure anything.
+The trade is named honestly: the `NO-SPAWN` rule and the write contract remain behavioural (spawn-contract
+prose plus the gate's after-the-fact checks) rather than runtime-enforced, and that is the same
+compliance boundary the gate itself has always lived on — stated in `REQUIREMENTS.md` as an open item
+rather than hidden.
 
-And the bonus, earned by the same research: **`REQUIREMENTS.md`'s first known open item is closable.** It
-says "the gate is opt-in… a host-level stop-hook that blocks turn-end until the gate passes would close
-it." The `Stop` hook **does** block on exit 2. So does `TaskCompleted`. The gate can stop being compliance
-and start being enforcement. Separate change, scoped on its own — but no longer hypothetical.
+The bonus finding stands unchanged for whoever wants it later: the `Stop` and `TaskCompleted` hooks both
+block on exit 2, so a host-level "gate must pass before turn-end" is buildable — as an optional
+hardening, never a prerequisite.
 
 ---
 

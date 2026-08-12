@@ -289,6 +289,125 @@ def check_citations(rows, repo_root):
     return errs
 
 
+MESSAGE_TYPES = {"NEED", "CONTRADICTS", "CLAIM", "RELEASE", "PUBLISHED"}
+
+
+def check_claims(rows, claims):
+    """Ownership must be consistent: one holder per item, and no verdict off the board.
+
+    Two claims without an intervening release is two workers on one item — duplicated
+    work is the multi-agent failure a claim board exists to prevent, and it is invisible
+    in the ledger because both workers produce plausible rows.
+    """
+    errs, holder, ever = [], {}, set()
+    for n, c in enumerate(claims, 1):
+        item, role, ev = c.get("item"), c.get("role"), c.get("event")
+        if not item or not role or ev not in ("claim", "release"):
+            errs.append(f"claims.jsonl row {n}: needs item, role, and event=claim|release")
+            continue
+        if ev == "claim":
+            if item in holder and holder[item] != role:
+                errs.append(f"{item}: claimed by {role!r} while still held by {holder[item]!r} — "
+                            f"two workers on one item is duplicated work; release first.")
+            holder[item] = role
+            ever.add(item)
+        else:
+            if holder.get(item) != role:
+                errs.append(f"{item}: released by {role!r} but held by {holder.get(item)!r}")
+            holder.pop(item, None)
+    for rid, r in sorted(rows.items()):
+        if r.get("verdict") in TERMINAL and rid not in ever:
+            errs.append(f"{rid}: verdicted but never claimed — work happened off the board, so "
+                        f"nothing prevented a second worker doing it too.")
+    return errs
+
+
+def check_bulletin(rows, bulletin):
+    """Published facts need provenance, retraction needs a target, and a live fact that
+    names an item must have been seen before that item was verdicted.
+
+    Provenance (published_by + cause_by) is what lets a reader tell an independent
+    finding from an echo of its own earlier output. `supersedes` is the only correction
+    path — the board is append-only, so a wrong fact is retracted by a later row, never
+    an edit. And the ack (`bulletins_seen` on the verdict) is what makes "workers pull
+    the board at item boundaries" a checkable fact instead of an instruction.
+    """
+    errs, by_id, superseded = [], {}, set()
+    for n, b in enumerate(bulletin, 1):
+        bid = b.get("id")
+        if not bid:
+            errs.append(f"bulletin.jsonl row {n}: no id")
+            continue
+        if bid in by_id:
+            errs.append(f"bulletin {bid}: duplicate id")
+        by_id[bid] = b
+        missing = [f for f in ("fact", "evidence", "published_by", "cause_by") if not b.get(f)]
+        if missing:
+            errs.append(f"bulletin {bid}: missing {', '.join(missing)} — a fact without full "
+                        f"provenance cannot be told apart from an echo; it is a rumour, not a row.")
+        sup = b.get("supersedes")
+        if sup:
+            if sup not in by_id:
+                errs.append(f"bulletin {bid}: supersedes {sup!r} which is not on the board — "
+                            f"a retraction must name a real earlier row.")
+            else:
+                superseded.add(sup)
+    for bid, b in sorted(by_id.items()):
+        if bid in superseded:
+            continue
+        for item in b.get("scope") or []:
+            r = rows.get(item)
+            if r is None:
+                errs.append(f"bulletin {bid}: scope names {item!r} but no such ledger row exists")
+            elif r.get("verdict") in TERMINAL and bid not in (r.get("bulletins_seen") or []):
+                errs.append(f"{item}: verdict recorded without acknowledging bulletin {bid}, which "
+                            f"names it — the verdict may rest on a superseded premise. Re-verify "
+                            f"with the fact in view and record it in bulletins_seen.")
+    return errs
+
+
+def check_messages(messages, decisions, bulletin_ids, cap):
+    """The direct channel is typed, capped, and adjudicated — or it is not a message.
+
+    Free prose between agents is banned (per-hop fidelity, not generation quality, is
+    what fails in relays), the per-agent cap is counted here because narration measurably
+    is not coordination, and a CONTRADICTS with no adjudication in decisions.jsonl fails
+    the run — an unresolved disagreement between two agents is exactly the conflicting
+    output the ledger would otherwise launder into two plausible rows.
+    """
+    errs, per = [], Counter()
+    adjudicated = set()
+    for d in decisions:
+        adjudicated.update(d.get("affects") or [])
+    for n, m in enumerate(messages, 1):
+        frm, to, typ = m.get("from"), m.get("to"), (m.get("type") or "").strip()
+        if not frm or not to or not typ:
+            errs.append(f"messages.jsonl row {n}: needs from, to, type")
+            continue
+        per[frm] += 1
+        head, _, arg = typ.partition(":")
+        if head not in MESSAGE_TYPES:
+            errs.append(f"messages.jsonl row {n}: type {typ!r} is outside the closed set "
+                        f"({'/'.join(sorted(MESSAGE_TYPES))}) — free-form messages between agents "
+                        f"are banned; publish the fact to the board instead.")
+            continue
+        arg = arg.split("#")[0].strip()
+        if head == "CONTRADICTS" and arg not in adjudicated:
+            errs.append(f"{frm}→{to}: CONTRADICTS:{arg} has no adjudication — record which side "
+                        f"won and on what evidence in decisions.jsonl (affects: [{arg!r}]), or mark "
+                        f"the row BLOCKED with the disagreement. A contradiction that is not "
+                        f"adjudicated fails the run.")
+        elif head == "PUBLISHED" and arg not in bulletin_ids:
+            errs.append(f"{frm}→{to}: PUBLISHED:{arg} but no such bulletin is on the board — the "
+                        f"nudge is only a pointer; the fact itself must be published first.")
+    for agent, n in sorted(per.items()):
+        if n > cap:
+            errs.append(f"{agent}: {n} messages exceeds the cap of {cap} — narration is not "
+                        f"coordination. Publish durable facts to the bulletin instead, or raise "
+                        f"the cap deliberately in the contract and pass it to the gate.")
+    return errs
+
+
 def run_oracle(cmd, use_shell=False):
     """Observe the achievement oracle rather than take the agent's word that it is green.
     This is the difference between a gate and a receipt for a claim.
@@ -315,7 +434,7 @@ def md_escape(s):
 
 
 def render(rows, decisions, group_by, mode="known", oracle=None, overturns=None,
-           headline=None, vocab=None):
+           headline=None, vocab=None, board=None):
     counts = Counter(r.get("verdict", "OPEN") for r in rows.values())
     blocking = [r for r in rows.values() if r.get("verdict") in BLOCKING]
     partial = [r for r in rows.values() if r.get("verdict") == "PARTIAL"]
@@ -454,6 +573,16 @@ def render(rows, decisions, group_by, mode="known", oracle=None, overturns=None,
         L.append("_none recorded_")
     L.append("")
 
+    if board:
+        L.append("## 9. Coordination")
+        L.append("")
+        msgs = ", ".join(f"{a}: {n}" for a, n in sorted(board["messages"].items())) or "none"
+        L.append(f"_Multi-agent run. {board['claims']} claim events · {board['bulletins']} "
+                 f"bulletin rows ({board['superseded']} superseded) · messages by sender: {msgs}. "
+                 f"All checked by this script; a contradiction without an adjudication or a "
+                 f"verdict blind to a bulletin naming it fails the gate._")
+        L.append("")
+
     docs_done_but_not = [r for r in rows.values()
                          if r.get("doc_says_done") and r.get("verdict") in ("FAIL", "PARTIAL")]
     if docs_done_but_not:
@@ -524,6 +653,20 @@ def main():
                     help="root for resolving cited paths in evidence/fix (default cwd)")
     ap.add_argument("--skip-citation-check", action="store_true",
                     help="do not resolve cited paths (for ledgers citing things outside the repo)")
+    # Coordination board (multi-agent runs). AUTO-DETECTED beside the ledger — the
+    # orchestrator that creates the board never has to remember a flag, and a
+    # single-agent run (no board files) behaves exactly as before these existed.
+    ap.add_argument("--claims", default=None,
+                    help="claims.jsonl (ownership events). Default: auto-detected next to the ledger.")
+    ap.add_argument("--bulletin", default=None,
+                    help="bulletin.jsonl (published cross-worker facts). Default: auto-detected.")
+    ap.add_argument("--messages", default=None,
+                    help="messages.jsonl (audit log of typed inter-agent sends). Default: auto-detected.")
+    ap.add_argument("--max-messages-per-agent", type=int, default=8,
+                    help="per-agent cap on logged sends (default 8). Raise it in the contract, "
+                         "deliberately — narration between agents is not coordination.")
+    ap.add_argument("--no-board", action="store_true",
+                    help="ignore board files even if present (deliberate opt-out, on the record)")
     args = ap.parse_args()
 
     ledger = load_jsonl(args.ledger)
@@ -613,6 +756,34 @@ def main():
             errs.append(f"{o['id']}: verdict raised {o['from']}→{o['to']} with the same proof_cmd — "
                         f"re-verify with a command that reflects the change, or leave it FAIL.")
 
+    # Coordination board — the shared half of the spine on a multi-agent run.
+    # The wire (SendMessage) is unverifiable, so these files are the only part of
+    # inter-agent coordination a gate can check; a run without them is single-agent
+    # and skips this block entirely.
+    board = None
+    if not args.no_board:
+        spine_dir = os.path.dirname(os.path.abspath(args.ledger))
+        auto = lambda flag, name: flag or (
+            os.path.join(spine_dir, name) if os.path.exists(os.path.join(spine_dir, name)) else None)
+        claims_p = auto(args.claims, "claims.jsonl")
+        bulletin_p = auto(args.bulletin, "bulletin.jsonl")
+        messages_p = auto(args.messages, "messages.jsonl")
+        if claims_p or bulletin_p or messages_p:
+            claims = load_jsonl(claims_p) if claims_p else []
+            bulletin = load_jsonl(bulletin_p) if bulletin_p else []
+            messages = load_jsonl(messages_p) if messages_p else []
+            if claims_p:
+                errs += check_claims(rows, claims)
+            if bulletin_p:
+                errs += check_bulletin(rows, bulletin)
+            if messages_p:
+                errs += check_messages(messages, decisions,
+                                       {b.get("id") for b in bulletin if b.get("id")},
+                                       args.max_messages_per_agent)
+            board = {"claims": len(claims), "bulletins": len(bulletin),
+                     "superseded": sum(1 for b in bulletin if b.get("supersedes")),
+                     "messages": Counter(m.get("from", "?") for m in messages)}
+
     n_blocked = sum(1 for r in rows.values() if r.get("verdict") == "BLOCKED")
     if n_blocked > args.allow_blocked:
         errs.append(f"{n_blocked} BLOCKED rows exceeds --allow-blocked={args.allow_blocked}")
@@ -620,7 +791,7 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(render(rows, decisions, args.group_by, args.mode, oracle, overturns,
-                        args.headline, args.verdict_vocab))
+                        args.headline, args.verdict_vocab, board))
 
     if errs:
         print(f"GATE FAILED — {len(errs)} integrity error(s). Fix the ledger, not this script.",

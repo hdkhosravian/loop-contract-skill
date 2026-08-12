@@ -66,6 +66,21 @@ gaps belong in `scope.jsonl`, not in a footnote.
 | 27 | Checkpoint each step; idempotent mutating actions | a resumed run must not double-apply | §1 idempotent writes; per-item record-before-next |
 | 28 | Trace the shape of every step, not its contents | you cannot improve what you cannot see | `metrics.jsonl` field spec |
 
+## Coordination (multi-agent runs)
+
+The evidence behind each is in [AGENT-COORDINATION.md](AGENT-COORDINATION.md). All are inert on a
+single-agent run: the gate checks the board only when board files exist beside the ledger.
+
+| # | Requirement | Why | Implemented in |
+|---|---|---|---|
+| 33 | Shared priors broadcast before fan-out, then frozen | two workers otherwise make incompatible implicit decisions | `agent-comms.md` — `brief.md`, sha recorded in `PROGRESS.md` |
+| 34 | Item ownership recorded; nothing doubled or dropped | duplicated work is invisible in the ledger — both workers produce plausible rows | `claims.jsonl`; gate `check_claims` — double-claim and never-claimed both fail |
+| 35 | Discovery propagation is pull-based from an append-only board, never pushed narration | "excessive updates" is a named production failure; a pull survives compaction | `bulletin.jsonl`; workers pull at item boundaries |
+| 36 | Each role reads a bounded view, never the whole board | bounded views are load-bearing in the strongest positive ablation; the middle of a long shared context is read worst | spawn contract `VIEW:` clause — only rows whose scope names your items |
+| 37 | Every board row carries provenance; acknowledgement is recorded | a claim tracing to your own output is not corroboration; an unseen fact is a superseded premise | gate `check_bulletin` — provenance fields and `bulletins_seen` both enforced |
+| 38 | A contradiction is adjudicated or the run fails; a wrong fact is revocable by a superseding row | the only part of coordination a script can verify — and the answer to consensus inertia | gate `check_messages` (CONTRADICTS→`decisions.jsonl`) and `supersedes` |
+| 39 | Coordination needs zero user configuration — the orchestrator creates the board, sets the caps, runs the gate | "you never type a flag or a path" is the skill's own front-door promise | gate auto-detects board files beside the ledger; caps derived per job, defaults as backstop |
+
 ## Outer loops
 
 | # | Requirement | Why | Implemented in |
@@ -89,5 +104,9 @@ gaps belong in `scope.jsonl`, not in a footnote.
 - **The gate is opt-in.** Every check `fold_ledger.py` performs happens only if the agent runs it. The
   skill makes "a done claim without an exit line is void" as sharp as prose can, but that is compliance,
   not enforcement. A host-level stop-hook that blocks turn-end until the gate passes would close it.
-- **No end-to-end trial on a long multi-session job.** The gate is verified against fixtures; the
-  behavioural half is not yet proven over a 40-item run that exceeds one context window.
+- **No end-to-end trial on a long multi-session job.** The gate is verified against fixtures
+  (`tests/test_gate.py`, coordination included); the behavioural half is not yet proven over a 40-item
+  run that exceeds one context window.
+- **The board's behavioural half is opt-in too.** The gate rejects an incoherent board, but only the
+  spawn contract makes workers pull it. Same compliance boundary as the gate itself, stated rather
+  than hidden.

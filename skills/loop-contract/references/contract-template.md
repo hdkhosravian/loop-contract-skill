@@ -129,6 +129,12 @@ First action: check whether `<dir>/PROGRESS.md` already exists.
   runs/<date>/       # RECURRING jobs only: one frozen copy of the spine per run, with `latest` →
                      # the newest. The previous ledger is what makes "what changed since last time"
                      # answerable; without it every run re-reports the same findings forever.
+  # MULTI-AGENT runs only — the coordination board (references/agent-comms.md). The
+  # orchestrator creates these itself; the gate detects and checks them automatically.
+  brief.md           # FROZEN before the fan-out. mission + conventions every worker reads at spawn.
+  claims.jsonl       # APPEND-ONLY. item ownership: {item, role, event: claim|release}.
+  bulletin.jsonl     # APPEND-ONLY, orchestrator-only. published facts with provenance; supersedes to retract.
+  messages.jsonl     # APPEND-ONLY. audit log of every typed inter-agent send.
 scripts/fold_ledger.py      # deterministic fold + completion gate
 ```
 

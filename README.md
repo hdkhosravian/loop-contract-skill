@@ -99,6 +99,13 @@ Fails on: a scoped item with no verdict · `FAIL`/`PARTIAL` in a DONE run · `PA
 rows sharing a `proof_cmd` · a citation that does not resolve · a `FAIL` quietly re-appended as `PASS` ·
 a scope smaller than the source · a red oracle. Run `--remaining` for the resume worklist.
 
+On a **multi-agent run** the gate auto-detects the coordination board (`brief.md` · `claims.jsonl` ·
+`bulletin.jsonl` · `messages.jsonl`) beside the ledger — nothing to configure — and additionally fails
+on: two workers claiming one item · a verdicted item never claimed · a published fact without
+provenance · a verdict blind to a bulletin that names its item · free-prose or over-cap messages ·
+a contradiction between agents with no adjudication on the record. Design and evidence:
+[docs/AGENT-COORDINATION.md](docs/AGENT-COORDINATION.md).
+
 ## Layout
 
 | Path | What |
@@ -108,6 +115,7 @@ a scope smaller than the source · a red oracle. Run `--remaining` for the resum
 | `skills/loop-contract/references/oracle-catalog.md` | the eight-rung oracle ladder; anti-oracles; oracles without tests |
 | `skills/loop-contract/references/token-policy.md` | the cost arithmetic and the binding rules |
 | `skills/loop-contract/references/subagent-contracts.md` | roles, spawn contract, coverage panel vs repeatability |
+| `skills/loop-contract/references/agent-comms.md` | multi-agent coordination: the ladder, the board, adjudication — zero user configuration |
 | `skills/loop-contract/references/triage-routing.md` | route / do-it / contract, and splitting a mixed request |
 | `skills/loop-contract/references/outer-loops.md` | trajectory metrics, `pass^k`, hill-climbing across runs |
 | `skills/loop-contract/references/recurring-jobs.md` | a contract on a schedule; the delta is the deliverable |
@@ -118,6 +126,8 @@ a scope smaller than the source · a red oracle. Run `--remaining` for the resum
 | `docs/LOOP-ENGINEERING.md` | the discipline this implements — failure modes, the central law, nested loops |
 | `docs/REQUIREMENTS.md` | the 32-requirement conformance matrix, and what is out of scope |
 | `docs/SOURCES.md` | every empirical claim, its source, and which are house heuristics |
+| `docs/AGENT-COORDINATION.md` | the multi-agent research and the design the board implements |
+| `tests/test_gate.py` | fixture tests for the gate, coordination checks included — run `python3 tests/test_gate.py` |
 
 Run state lives in `.claude/loops/<job-slug>/`, one directory per job. Deliverables do **not** — that
 directory is usually gitignored, and the artifact must outlive the run.

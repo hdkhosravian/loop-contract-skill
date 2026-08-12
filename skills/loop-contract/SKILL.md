@@ -474,6 +474,12 @@ PROGRESS.md. A worker that needs further decomposition returns BLOCKED and lets 
 re-scope it.
 See `references/subagent-contracts.md`.
 
+When several workers must **coordinate** — shared conventions, item ownership, a mid-run discovery
+that changes another worker's premise — read `references/agent-comms.md` and build the board
+yourself: `brief.md` before the fan-out, `claims.jsonl` for ownership, `bulletin.jsonl` for
+published facts, typed messages only. All of it is yours to create and the gate's to check — it
+auto-detects the board beside the ledger; the user configures nothing and types nothing.
+
 ## Ask versus infer
 
 Ask at most **one** question, and only when the answer changes the contract's shape — usually the
@@ -508,6 +514,7 @@ exempt from "don't ask" exactly like the §1 APPROVAL gate.
 - `references/contract-template.md` — the fill-in skeleton. Read before writing any contract.
 - `references/oracle-catalog.md` — oracles by job type; what to do when there is none.
 - `references/subagent-contracts.md` — role design, spawn contract, output schema.
+- `references/agent-comms.md` — coordination between workers: the ladder, the board (brief/claims/bulletin/messages), adjudication. Read only when a job fans out.
 - `references/token-policy.md` — the arithmetic, and the binding rules to copy in.
 - `references/execution-protocol.md` — how the fresh session should *run* a contract on a Claude Code host: best tools for isolation not flex, token discipline as the hard constraint.
 - `references/outer-loops.md` — the meta-layer around a single run: trajectory metrics, `pass^k` repeatability, and Loop 4 hill-climbing (retro + ratified priors).
