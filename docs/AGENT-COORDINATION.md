@@ -123,6 +123,39 @@ Cognition says *share more context*; Anthropic says *agents distracting each oth
 updates* was a live failure. Both are right, and the resolution is in §5: shared **state** is broadcast
 and pull-based; shared **narration** is banned.
 
+### 2.7 The counter-evidence — looked for deliberately, and it argues for a ladder
+
+A design this one-sided deserves a hunt for its own refutation. What turns up does not overturn the
+position; it sharpens it into a choice-per-job rather than a fixed topology.
+
+- **Sparse beats dense, even in debate.** *Improving Multi-Agent Debate with Sparse Communication
+  Topology* finds that restricting who hears whom outperforms a full mesh. The cheapest defence of
+  "minimise the channel" is that the debate literature — the most communication-heavy setting there is —
+  reaches the same conclusion internally. **[E]**
+- **Full-mesh debate does win, but locally.** Two-round full-mesh debate is reported as the best
+  topology at the *block* level of optimisation, while at the *workflow* level aggregating more parallel
+  agents outweighs debating ones. So mesh earns its cost inside one hard question, not across a run.
+  **[E]**
+- **Adaptive topology beats any fixed one.** A router selecting topology per task reports +22.9% over
+  the single best fixed baseline on SWE-bench Verified, choosing hybrid 62% of the time, parallel 24%,
+  hierarchical 14%. **[P]** — this is the strongest single argument for §4 being a *ladder* rather than a
+  house style.
+- **Peer-to-peer mesh has a legitimate niche**: when latency dominates and mature inter-agent trust
+  protocols exist. Neither condition holds for an unattended, verifier-bound loop. **[P]**
+- **The star's real cost is the hub's context window** — it must hold the task description and every
+  worker result. **[P]** Worth noting that this repo already defeats that: results land in the ledger on
+  disk, not in the orchestrator's window, and `--remaining` recomputes rather than recalls. The star's
+  dominant weakness is one of the few this design has already paid for.
+
+**Where this changes the design: debate belongs at adjudication, not at judgment.** The existing coverage
+panel is deliberately independent — its lenses ask *different* questions, so letting them argue is
+meaningless. The repeatability check is deliberately independent too — debate would destroy the very
+independence that makes agreement a measurement. But once law 6 has surfaced a contradiction, a bounded
+exchange between exactly the two dissenting lenses is a legitimate way to *adjudicate* it, and the debate
+literature is the evidence that it works. So: three mechanisms, kept apart — **panel for coverage,
+repetition for stability, debate for adjudication.** Conflating any two of them is the error
+`subagent-contracts.md` already warns about, with one more term to keep straight.
+
 ---
 
 ## 3. What the host actually provides
@@ -270,6 +303,12 @@ PASS is handled by a sentence asking the agent to investigate. Under this law, a
 lens conflict must carry an adjudication — a `decisions.jsonl` row naming which side won and on what
 evidence — and `fold_ledger.py` exits non-zero without one.
 
+Adjudication is the one place a bounded exchange between the two dissenting agents is warranted (§2.7),
+capped at one round each and settled on evidence, not on who spoke last. Two outcomes only: a
+`decisions.jsonl` row, or `BLOCKED` with the disagreement recorded. **Never resolved by tightening the
+rubric until the lenses agree** — that is how a real defect gets rubbed out, and the existing rule stands
+unchanged.
+
 That converts the coordination layer from prose into a check. Which is the whole method: *an agent's
 power is bounded by its verifier* becomes **a channel's value is bounded by the check that can read it.**
 
@@ -392,6 +431,8 @@ is worth adding at all is that it is the first version of inter-agent communicat
 - *Scaling Large Language Model-based Multi-Agent Collaboration* (MacNet) — https://arxiv.org/abs/2406.07155
 - MetaGPT — shared message pool and role-based subscription — https://arxiv.org/abs/2308.00352
 - *Faithful, Not Corrective: Message-Format Effects in Multi-Hop Agent Relays* — https://arxiv.org/abs/2607.09678
+- *Improving Multi-Agent Debate with Sparse Communication Topology* — https://arxiv.org/abs/2406.11776
+- *Multi-Agent Design: Optimizing Agents with Better Prompts and Topologies* — https://arxiv.org/abs/2502.02533
 
 **Position pieces**
 - Cognition — *Don't Build Multi-Agents* (2025) — https://cognition.com/blog/dont-build-multi-agents
