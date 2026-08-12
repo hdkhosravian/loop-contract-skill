@@ -81,6 +81,31 @@ you do not have a source.
 | Recitation of the goal at the tail of context counters drift | **[E]** | Manus (above) |
 | Progressive tool disclosure sharply reduces at-rest token cost | **[E]** | Anthropic tool-writing + Agent Skills (above) |
 
+## Multi-agent coordination
+
+> Full analysis in [AGENT-COORDINATION.md](AGENT-COORDINATION.md). **Sourcing caveat, kept visible:**
+> most publisher domains were unreachable from the session that gathered these, so rows marked **[E]†**
+> were read through abstracts and secondary coverage rather than the primary PDF — the *finding* is a
+> published result, but confirm the *precise figure* against the primary before quoting it. Apply the
+> noise-floor row to every other number in this table first.
+
+| Claim | Tag | Source |
+|---|---|---|
+| Configuration-equivalent multi-agent protocols produce apparent effects across a [−3, +18] pp envelope; most reported coordination gains sit inside it | **[E]†** | Paired noise-floor protocol — arXiv:2606.20695 |
+| At matched thinking-token budget, single agents match or beat five multi-agent variants on multi-hop reasoning | **[E]†** | Tran & Kiela — arXiv:2604.02460 |
+| Single-agent baseline predicts the sign of the multi-agent effect (94% of validation configurations) | **[E]†** | *Nature Machine Intelligence* 2026 — s42256-026-01268-y |
+| ~⅓ of multi-agent failures are inter-agent misalignment; largest single modes are coordination-state failures; prompt/topology fixes gave only marginal gains | **[E]†** | MAST — arXiv:2503.13657 (two inconsistent percentage sets circulate; never quote to decimals) |
+| Paired coding agents average ~30% lower success than solo on the same tasks; up to 20% of budget on communication with no success gain | **[E]†** | CooperBench — arXiv:2601.13295 |
+| Replacing dialogue with schema-validated state mutation: 84.6% vs 30.8%/61.6%; ablation credits bounded views, write contracts, deterministic validation | **[E]†** | PatchBoard — arXiv:2605.29313 |
+| Behavioural contracts + structured messaging cut MAST-taxonomy failures by up to ~70% | **[E]†** | SEMAP — arXiv:2510.12120 |
+| Pruning redundant inter-agent edges: 28–73% token cut at equal accuracy, and *improved* robustness to agent-based attacks | **[E]†** | AgentPrune — arXiv:2410.02506 |
+| Pull-based, non-blocking awareness: +29.8 pp over solo, beating a stronger model on the same harness | **[E]†** | AgentRadio — arXiv:2607.28430 (framework-affiliated, single benchmark) |
+| CRDT shared state: 100% syntactic convergence with 5–10% semantic conflicts; −39.4% to +21.1% speed by task shape | **[E]†** | CodeCRDT — arXiv:2510.18893 |
+| Shared-store pathologies: provenance collapse, self-echo as false corroboration, consensus inertia | **[E]†** | arXiv:2606.24535 · arXiv:2603.04474 |
+| Hub pathology "information withholding"; ~7-worker split heuristic; supervisor overhead 20–40% vs <50 ms deterministic routing | **[P]** | practitioner/vendor writing — no controlled measurement found |
+| Blackboard / tuple-space / pub-sub lineage; extensible verb sets fragment (KQML), unverifiable semantics die (FIPA-ACL) | **[E]** | Hearsay-II (*ACM Comp. Surveys* 1980) · Linda (*TOPLAS* 1985) · Eugster (*Comp. Surveys* 2003) · KQML/FIPA record |
+| The board schema, the seven laws, the coordination ladder, the message-cap default of 8, the rung-0 entry test | **[H]** | ours — unproven end-to-end, and subject to the noise-floor row above when eventually measured |
+
 ## House heuristics — ours, not measurements
 
 | Claim | Tag |
