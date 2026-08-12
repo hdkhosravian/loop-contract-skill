@@ -21,6 +21,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -51,6 +52,17 @@ def load_jsonl(path, required=True):
 
 
 SEVERITY = {"FAIL": 0, "BLOCKED": 1, "PARTIAL": 2, "PASS": 3}
+
+
+def norm_proof(pc):
+    """A proof command modulo trailing comments and whitespace.
+
+    Identity checks on proof_cmd must survive cosmetic edits: `x  # R-2` is the same
+    command as `x  # R-1`, and treating them as distinct is exactly how one test gets
+    cited as the individual proof of twenty rows — or a FAIL gets laundered to PASS by
+    appending " # re-verified" to an unchanged check.
+    """
+    return re.sub(r"\s#.*$", "", pc or "").strip()
 
 
 def fold(ledger, verdicts):
@@ -106,7 +118,12 @@ def integrity(rows, mode="known"):
             # Not just PASS: PARTIAL ("looks half-wired") and FAIL ("I couldn't find it") are the
             # verdicts most often asserted from a reading. An absence is a claim, not a fact —
             # it needs a command that ran and a positive control, same as a presence.
-            if not r.get("evidence"):
+            ev = r.get("evidence")
+            if ev is not None and not isinstance(ev, list):
+                errs.append(f"{rid}: evidence must be a list of citations, got "
+                            f"{type(ev).__name__} — a bare string would be checked "
+                            f"character-by-character, which is nobody's intent.")
+            elif not ev:
                 errs.append(f"{rid}: {v} without evidence — a reading, not a verification")
             if not r.get("proof_cmd"):
                 errs.append(f"{rid}: {v} without proof_cmd — nothing was actually run")
@@ -238,7 +255,7 @@ def check_per_task_proof(rows, mode):
     for rid, r in sorted(rows.items()):
         if r.get("verdict") != "PASS" or r.get("fix") == "none":
             continue
-        pc = (r.get("proof_cmd") or "").strip()
+        pc = norm_proof(r.get("proof_cmd"))
         if pc:
             seen.setdefault(pc, []).append(rid)
     for pc, ids in seen.items():
@@ -254,7 +271,8 @@ def check_citations(rows, repo_root):
     the same fabrication check the skill prescribes for the user's deliverables."""
     errs = []
     for rid, r in sorted(rows.items()):
-        cites = list(r.get("evidence") or [])
+        ev = r.get("evidence")
+        cites = list(ev) if isinstance(ev, list) else []  # non-list already errored in integrity()
         fix = r.get("fix")
         if fix and fix != "none":
             cites.append(fix)
@@ -289,7 +307,10 @@ def check_citations(rows, repo_root):
     return errs
 
 
-MESSAGE_TYPES = {"NEED", "CONTRADICTS", "CLAIM", "RELEASE", "PUBLISHED"}
+MESSAGE_TYPES = {"NEED", "CONTRADICTS", "PUBLISHED"}
+# CLAIM/RELEASE are deliberately absent: ownership is rows in claims.jsonl, full stop.
+# A message restating the claim board is narration, and per-item claim messages on a
+# batched spawn would bust the cap by design.
 
 
 def check_claims(rows, claims):
@@ -297,7 +318,8 @@ def check_claims(rows, claims):
 
     Two claims without an intervening release is two workers on one item — duplicated
     work is the multi-agent failure a claim board exists to prevent, and it is invisible
-    in the ledger because both workers produce plausible rows.
+    in the ledger because both workers produce plausible rows. The same-role case is not
+    exempt: two workers sharing a role name collide just as invisibly.
     """
     errs, holder, ever = [], {}, set()
     for n, c in enumerate(claims, 1):
@@ -305,10 +327,15 @@ def check_claims(rows, claims):
         if not item or not role or ev not in ("claim", "release"):
             errs.append(f"claims.jsonl row {n}: needs item, role, and event=claim|release")
             continue
+        if item not in rows:
+            errs.append(f"{item}: claim event for an item not in the ledger — ownership of "
+                        f"nonexistent work is a sign the board and the ledger have diverged.")
+            continue
         if ev == "claim":
-            if item in holder and holder[item] != role:
-                errs.append(f"{item}: claimed by {role!r} while still held by {holder[item]!r} — "
-                            f"two workers on one item is duplicated work; release first.")
+            if item in holder:
+                errs.append(f"{item}: claimed by {role!r} while still held by {holder[item]!r} "
+                            f"without an intervening release — two workers on one item is "
+                            f"duplicated work, even under the same role name.")
             holder[item] = role
             ever.add(item)
         else:
@@ -340,18 +367,24 @@ def check_bulletin(rows, bulletin):
             continue
         if bid in by_id:
             errs.append(f"bulletin {bid}: duplicate id")
-        by_id[bid] = b
         missing = [f for f in ("fact", "evidence", "published_by", "cause_by") if not b.get(f)]
         if missing:
             errs.append(f"bulletin {bid}: missing {', '.join(missing)} — a fact without full "
                         f"provenance cannot be told apart from an echo; it is a rumour, not a row.")
         sup = b.get("supersedes")
         if sup:
-            if sup not in by_id:
-                errs.append(f"bulletin {bid}: supersedes {sup!r} which is not on the board — "
-                            f"a retraction must name a real earlier row.")
+            # Resolved against STRICTLY EARLIER rows — this row is not in by_id yet, so a
+            # self-reference or forward reference both fail here. A row that could retire
+            # itself would dodge its own ack check, which is a gamed board's cheapest move.
+            if sup == bid:
+                errs.append(f"bulletin {bid}: supersedes itself — a row cannot retire itself "
+                            f"to dodge its own acknowledgement check.")
+            elif sup not in by_id:
+                errs.append(f"bulletin {bid}: supersedes {sup!r} which is not an earlier row — "
+                            f"a retraction must name a real row already on the board.")
             else:
                 superseded.add(sup)
+        by_id[bid] = b
     for bid, b in sorted(by_id.items()):
         if bid in superseded:
             continue
@@ -359,7 +392,12 @@ def check_bulletin(rows, bulletin):
             r = rows.get(item)
             if r is None:
                 errs.append(f"bulletin {bid}: scope names {item!r} but no such ledger row exists")
-            elif r.get("verdict") in TERMINAL and bid not in (r.get("bulletins_seen") or []):
+                continue
+            seen = r.get("bulletins_seen")
+            if seen is not None and not isinstance(seen, list):
+                errs.append(f"{item}: bulletins_seen must be a list, got {type(seen).__name__} — "
+                            f"a bare string would acknowledge by substring, which acks nothing.")
+            elif r.get("verdict") in TERMINAL and bid not in (seen or []):
                 errs.append(f"{item}: verdict recorded without acknowledging bulletin {bid}, which "
                             f"names it — the verdict may rest on a superseded premise. Re-verify "
                             f"with the fact in view and record it in bulletins_seen.")
@@ -378,7 +416,10 @@ def check_messages(messages, decisions, bulletin_ids, cap):
     errs, per = [], Counter()
     adjudicated = set()
     for d in decisions:
-        adjudicated.update(d.get("affects") or [])
+        # Only a decision that actually decides counts: a shell row carrying nothing but
+        # an `affects` list would otherwise adjudicate any contradiction for free.
+        if d.get("resolution") and d.get("question"):
+            adjudicated.update(d.get("affects") or [])
     for n, m in enumerate(messages, 1):
         frm, to, typ = m.get("from"), m.get("to"), (m.get("type") or "").strip()
         if not frm or not to or not typ:
@@ -394,9 +435,10 @@ def check_messages(messages, decisions, bulletin_ids, cap):
         arg = arg.split("#")[0].strip()
         if head == "CONTRADICTS" and arg not in adjudicated:
             errs.append(f"{frm}→{to}: CONTRADICTS:{arg} has no adjudication — record which side "
-                        f"won and on what evidence in decisions.jsonl (affects: [{arg!r}]), or mark "
-                        f"the row BLOCKED with the disagreement. A contradiction that is not "
-                        f"adjudicated fails the run.")
+                        f"won and on what evidence in decisions.jsonl (a row with question, "
+                        f"resolution, and affects: [{arg!r}]; a shell row with affects alone does "
+                        f"not count), or mark the row BLOCKED with the disagreement. A "
+                        f"contradiction that is not adjudicated fails the run.")
         elif head == "PUBLISHED" and arg not in bulletin_ids:
             errs.append(f"{frm}→{to}: PUBLISHED:{arg} but no such bulletin is on the board — the "
                         f"nudge is only a pointer; the fact itself must be published first.")
@@ -667,6 +709,11 @@ def main():
                          "deliberately — narration between agents is not coordination.")
     ap.add_argument("--no-board", action="store_true",
                     help="ignore board files even if present (deliberate opt-out, on the record)")
+    ap.add_argument("--require-board", action="store_true",
+                    help="fail if NO board files exist beside the ledger. The orchestrator of a "
+                         "multi-agent run writes this into the contract's gate command, so a board "
+                         "that was never written (or was deleted) fails instead of silently "
+                         "skipping every coordination check.")
     args = ap.parse_args()
 
     ledger = load_jsonl(args.ledger)
@@ -700,6 +747,14 @@ def main():
     if args.scope:
         scope_rows = load_jsonl(args.scope)
         errs += check_scope(rows, scope_rows, args.mode)
+        # A duplicated id defeats every count check below: a post-freeze edit that drops
+        # half the scope but pads with repeats keeps the frozen count and passes.
+        dup_ids = [i for i, c in Counter(s.get("id") for s in scope_rows if s.get("id")).items()
+                   if c > 1]
+        if dup_ids:
+            errs.append(f"duplicate scope id(s): {', '.join(sorted(dup_ids)[:5])} — a frozen scope "
+                        f"lists each item exactly once; repeats pad the count without covering "
+                        f"the work.")
         # The freeze is only real if it cannot be rewritten to match what got done.
         if args.expect_scope_count is not None and len(scope_rows) != args.expect_scope_count:
             errs.append(f"scope has {len(scope_rows)} rows but {args.expect_scope_count} were "
@@ -752,7 +807,8 @@ def main():
 
     # A FAIL quietly re-appended as PASS is how an inconvenient verdict gets laundered.
     for o in overturns:
-        if args.mode == "done" and o["from"] == "FAIL" and o["prev_proof"] == o["new_proof"]:
+        if (args.mode == "done" and o["from"] == "FAIL"
+                and norm_proof(o["prev_proof"]) == norm_proof(o["new_proof"])):
             errs.append(f"{o['id']}: verdict raised {o['from']}→{o['to']} with the same proof_cmd — "
                         f"re-verify with a command that reflects the change, or leave it FAIL.")
 
@@ -772,7 +828,11 @@ def main():
             claims = load_jsonl(claims_p) if claims_p else []
             bulletin = load_jsonl(bulletin_p) if bulletin_p else []
             messages = load_jsonl(messages_p) if messages_p else []
-            if claims_p:
+            if claims_p and not claims:
+                errs.append("claims.jsonl is present but has no events — a scaffolded board with "
+                            "unclaimed work. Claim the items, or remove the file if this run is "
+                            "genuinely single-agent.")
+            elif claims_p:
                 errs += check_claims(rows, claims)
             if bulletin_p:
                 errs += check_bulletin(rows, bulletin)
@@ -782,16 +842,23 @@ def main():
                                        args.max_messages_per_agent)
             board = {"claims": len(claims), "bulletins": len(bulletin),
                      "superseded": sum(1 for b in bulletin if b.get("supersedes")),
-                     "messages": Counter(m.get("from", "?") for m in messages)}
+                     "messages": Counter((m.get("from") or "?") for m in messages)}
+    if args.require_board and board is None:
+        errs.append("--require-board: no board files found beside the ledger — this was declared "
+                    "a multi-agent run, so a missing board is not a single-agent run, it is a "
+                    "coordination record that was never written (or was deleted).")
 
     n_blocked = sum(1 for r in rows.values() if r.get("verdict") == "BLOCKED")
     if n_blocked > args.allow_blocked:
         errs.append(f"{n_blocked} BLOCKED rows exceeds --allow-blocked={args.allow_blocked}")
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+    # Render fully before touching the file: a crash mid-render must not leave a
+    # truncated REPORT.md that reads as a finished (empty) report.
+    report = render(rows, decisions, args.group_by, args.mode, oracle, overturns,
+                    args.headline, args.verdict_vocab, board)
     with open(args.out, "w", encoding="utf-8") as fh:
-        fh.write(render(rows, decisions, args.group_by, args.mode, oracle, overturns,
-                        args.headline, args.verdict_vocab, board))
+        fh.write(report)
 
     if errs:
         print(f"GATE FAILED — {len(errs)} integrity error(s). Fix the ledger, not this script.",

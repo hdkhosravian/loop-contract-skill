@@ -477,7 +477,10 @@ messages would change a verdict, the design is wrong — move the fact down to r
 ## 5. The design — the board, and seven laws
 
 The spine already exists. This adds its **shared half**, the **board**. Four files inside
-`.claude/loops/<job>/`, every one obeying one-writer-per-file:
+`.claude/loops/<job>/`. The write rule, stated precisely: **partitioned append** — every writer appends
+rows only it may write, and no row is ever edited. For `brief.md` and `bulletin.jsonl` the partition is
+"orchestrator only"; for `claims.jsonl` and `messages.jsonl` it is "your own rows only". What is
+forbidden is two writers on one *row's* truth — not two appenders on one file:
 
 | File | Written by | Read by | Contents |
 |---|---|---|---|
@@ -490,16 +493,18 @@ A bulletin row, with the two fields §2.9 forces:
 
 ```json
 {"id":"B-3","fact":"tenant_id replaces org_id on the orders table",
- "evidence":"migrations/0042.sql:17","cause_by":"schema-recon",
- "published_by":"architect","scope":["R-4","R-9"],"supersedes":null,"ts":"…"}
+ "evidence":"migrations/0042.sql:17","cause_by":"architect/schema-recon",
+ "published_by":"orchestrator","scope":["R-4","R-9"],"supersedes":null,"ts":"…"}
 ```
 
 `cause_by` and `published_by` are **provenance** — without them a worker cannot tell an independent
-finding from an echo of its own earlier output (§2.9). `supersedes` is the retraction path: the board is
-append-only, so a wrong fact is corrected by a superseding row, never by an edit. That is the answer to
-consensus inertia — **a fact on the board must be revocable, or the board is a trap.** And `scope`
-predicates *which items* a fact bears on, not *which agents* — the publisher must not have to know who
-cares (§2.10, MetaGPT's `cause_by`).
+finding from an echo of its own earlier output (§2.9). `published_by` is always the orchestrator (it is
+the bulletin's only writer); `cause_by` names the role and phase whose work *discovered* the fact, so the
+discovering voice stays traceable through the single writer. `supersedes` is the retraction path: the
+board is append-only, so a wrong fact is corrected by a superseding row, never by an edit. That is the
+answer to consensus inertia — **a fact on the board must be revocable, or the board is a trap.** And
+`scope` predicates *which items* a fact bears on, not *which agents* — the publisher must not have to
+know who cares (§2.10, MetaGPT's `cause_by`).
 
 ### The seven laws
 
@@ -507,10 +512,12 @@ cares (§2.10, MetaGPT's `cause_by`).
 Anything another agent *must* know is published to the board first; a message may then say "go look."
 *(§3.1: delivery is held/refused/expired/throttled and unverifiable. §2.10: FIPA-ACL died of exactly this.)*
 
-**2 · One writer per file; one decider per decision; a write contract per role.** Reads fan out, writes
-converge. Parallel writers to one artefact are forbidden; where genuinely unavoidable, each writer gets a
-worktree and the orchestrator merges. Each role declares **which paths it may write**, and that
-declaration is enforced, not requested. *(Cognition's single-writer principle, §2.6; PatchBoard's
+**2 · Partitioned writes; one decider per decision; a write contract per role.** Reads fan out, writes
+converge. Every board file is append-only with a declared writer partition (orchestrator-only for
+`brief.md`/`bulletin.jsonl`, own-rows-only for `claims.jsonl`/`messages.jsonl`); no row is ever edited,
+and no two writers ever own one row's truth. Parallel writers to one *deliverable* artefact are
+forbidden; where genuinely unavoidable, each writer gets a worktree and the orchestrator merges. Each
+role declares **which paths it may write**. *(Cognition's single-writer principle, §2.6; PatchBoard's
 role-specific write contracts, §2.8; the host's own "two teammates editing the same file leads to
 overwrites.")*
 
@@ -533,8 +540,12 @@ schema; a per-worker cap counted in `PROGRESS.md` exactly like spawns; every sen
 |---|---|---|
 | `NEED:<role>` | blocked; needs your authority | replaces one re-spawn — the asker keeps its context |
 | `CONTRADICTS:<id>` | my evidence contradicts a published row | must be adjudicated — law 7 |
-| `CLAIM:<id>` / `RELEASE:<id>` | ownership, absent a claim board | mirrored to `claims.jsonl` |
 | `PUBLISHED:<B-id>` | a bulletin row exists bearing on your items | the *fact* is on the board; this is only the nudge |
+
+Ownership is deliberately **not** a message type. An earlier draft carried `CLAIM`/`RELEASE` messages
+"mirrored to claims.jsonl" — review killed them: per-item claim+release on a twenty-item batch is forty
+sends against a cap of eight, duplicating what the file already records. The claim board **is** the
+mechanism; a message restating it is narration.
 
 *Closed, not extensible* — that is the KQML lesson (§2.10). The cap is not bureaucracy: agents spend up to
 20% of budget on communication for no success gain (§2.2), "excessive updates" is a named production
@@ -625,7 +636,7 @@ Every change is additive; no existing contract changes behaviour.
 | **New** `references/agent-comms.md` — the ladder, the seven laws, the board schema, the spawn additions | progressive disclosure: read only when a job actually fans out. Single-agent runs never load it. |
 | `references/subagent-contracts.md` — add `BRIEF:`, `VIEW:` and `MESSAGES:` blocks to the spawn contract; extend escalation with the rung-4 option | appends to an existing block. `NO-SPAWN` and the one-re-spawn cap stay exactly as they are. |
 | `references/contract-template.md` §2 — list the four board files as **optional, multi-agent only**; §1 BUDGET gains a message cap beside the spawn ceiling | §2 already enumerates spine files; a single-agent job has none of these. |
-| `scripts/fold_ledger.py` — new flags `--claims`, `--bulletin`, `--messages`, `--require-adjudication`, `--max-messages-per-agent`, `--require-provenance` | **all default off.** Absent the flags the gate behaves byte-identically, so every existing fixture keeps passing. |
+| `scripts/fold_ledger.py` — board checks (claims consistency, bulletin provenance + `bulletins_seen` acks + `supersedes`, closed message set, per-sender cap, adjudication) **auto-detected** from board files beside the ledger; agent-facing overrides only (`--claims/--bulletin/--messages` paths, `--max-messages-per-agent`, `--no-board`, `--require-board` for a fan-out that must not lose its board) | **no board files → byte-identical behaviour**, held by a regression fixture. Adjudication and provenance are always-on when a board exists — per the zero-config decision (§6.2), not flags anyone remembers. |
 | `docs/REQUIREMENTS.md` — a new **Coordination** section, requirements 33–39 | the matrix is explicitly designed to be re-audited "whenever the canon moves." |
 | `docs/SOURCES.md` — a new **Multi-agent coordination** block, tagged, plus the §0 noise-floor entry as a standing filter | same discipline as every other claim. |
 | `docs/LOOP-ENGINEERING.md` §3 — a sixth failure mode: **coordination loss** | genuinely new: it cannot occur in a single loop, so it is an addition rather than a correction. |

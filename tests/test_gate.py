@@ -45,14 +45,27 @@ def base_run(d, ids=("R-1", "R-2")):
     write_jsonl(os.path.join(d, "decisions.jsonl"), [])
 
 
-def run_gate(d):
+def base_run_done(d, ids=("R-1", "R-2")):
+    """A minimal healthy DONE-mode run: each row PASS with its own fix and distinct proof."""
+    base_run(d, ids)
+    write_jsonl(os.path.join(d, "verdicts.jsonl"),
+                [{"id": i, "verdict": "PASS", "evidence": ["src.txt:1"],
+                  "proof_cmd": f"grep -n {w} src.txt", "fix": "src.txt:1",
+                  "fix_verdict": "PASS", "role": "engineer"}
+                 for i, w in zip(ids, ("alpha", "beta"))])
+
+
+def run_gate(d, mode="known", extra=None):
     cmd = [sys.executable, GATE,
            "--ledger", os.path.join(d, "ledger.jsonl"),
            "--verdicts", os.path.join(d, "verdicts.jsonl"),
            "--decisions", os.path.join(d, "decisions.jsonl"),
            "--scope", os.path.join(d, "scope.jsonl"),
            "--out", os.path.join(d, "REPORT.md"),
-           "--mode", "known", "--repo-root", d]
+           "--mode", mode, "--repo-root", d]
+    if mode == "done":
+        cmd += ["--oracle-cmd", "true", "--expect-scope-count", "2"]
+    cmd += extra or []
     p = subprocess.run(cmd, capture_output=True, text=True)
     return p.returncode, p.stderr
 
@@ -99,9 +112,9 @@ def good_board(d):
 CASES = []
 
 
-def case(name, expect_code, expect_phrase=None):
+def case(name, expect_code, expect_phrase=None, mode="known", extra=None):
     def deco(fn):
-        CASES.append((name, fn, expect_code, expect_phrase))
+        CASES.append((name, fn, expect_code, expect_phrase, mode, extra))
         return fn
     return deco
 
@@ -198,13 +211,175 @@ def c_ghost_publish(d):
     ])
 
 
+# -- adversarial cases from the review (each observed exit 0 before its fix) -----------
+
+@case("bulletin superseding ITSELF cannot retire itself to dodge acks", 1,
+      "supersedes itself")
+def c_self_supersede(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "bulletin.jsonl"), [
+        {"id": "B-1", "fact": "tenant_id replaces org_id", "evidence": "src.txt:2",
+         "cause_by": "schema-recon", "published_by": "orchestrator",
+         "scope": ["R-1"], "supersedes": "B-1"},
+    ])
+    write_jsonl(os.path.join(d, "verdicts.jsonl"), [
+        {"id": "R-1", "verdict": "PASS", "evidence": ["src.txt:1"],
+         "proof_cmd": "grep -n alpha src.txt", "role": "engineer"},
+        {"id": "R-2", "verdict": "PASS", "evidence": ["src.txt:2"],
+         "proof_cmd": "grep -n beta src.txt", "role": "checker"},
+    ])
+
+
+@case("bulletins_seen as a string cannot ack by substring", 1, "must be a list")
+def c_seen_string(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "verdicts.jsonl"), [
+        {"id": "R-1", "verdict": "PASS", "evidence": ["src.txt:1"],
+         "proof_cmd": "grep -n alpha src.txt", "bulletins_seen": "B-10 was interesting"},
+        {"id": "R-2", "verdict": "PASS", "evidence": ["src.txt:2"],
+         "proof_cmd": "grep -n beta src.txt"},
+    ])
+
+
+@case("content-free decisions row is not an adjudication", 1, "adjudicat")
+def c_shell_adjudication(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "decisions.jsonl"), [{"affects": ["R-2"]}])
+
+
+@case("message with from:null gets a diagnostic, not a traceback", 1, "needs from")
+def c_null_sender(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "messages.jsonl"), [
+        {"from": None, "to": "checker", "type": "NEED:checker"},
+        {"from": "checker", "to": "orchestrator", "type": "CONTRADICTS:R-2"},
+    ])
+
+
+@case("CLAIM message type was cut from the closed set — ownership is the file", 1,
+      "closed set")
+def c_claim_message(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "messages.jsonl"), [
+        {"from": "engineer", "to": "orchestrator", "type": "CLAIM:R-1"},
+        {"from": "checker", "to": "orchestrator", "type": "CONTRADICTS:R-2"},
+    ])
+
+
+@case("claim for an item not in the ledger", 1, "not in the ledger")
+def c_ghost_claim(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "claims.jsonl"), [
+        {"item": "R-99", "role": "ghost", "event": "claim"},
+        {"item": "R-1", "role": "engineer", "event": "claim"},
+        {"item": "R-2", "role": "checker", "event": "claim"},
+    ])
+
+
+@case("re-claim by the SAME role without release is still a double claim", 1,
+      "without an intervening release")
+def c_same_role_reclaim(d):
+    good_board(d)
+    write_jsonl(os.path.join(d, "claims.jsonl"), [
+        {"item": "R-1", "role": "engineer", "event": "claim"},
+        {"item": "R-1", "role": "engineer", "event": "claim"},
+        {"item": "R-2", "role": "checker", "event": "claim"},
+    ])
+
+
+@case("claims.jsonl present but empty -> one clear error, not per-row noise", 1,
+      "no events")
+def c_empty_claims(d):
+    good_board(d)
+    open(os.path.join(d, "claims.jsonl"), "w").close()
+
+
+@case("--require-board fails when no board files exist", 1, "require-board",
+      extra=["--require-board"])
+def c_require_board(d):
+    pass
+
+
+@case("evidence as a string -> one type error, not one error per character", 1,
+      "must be a list")
+def c_string_evidence(d):
+    write_jsonl(os.path.join(d, "verdicts.jsonl"), [
+        {"id": "R-1", "verdict": "PASS", "evidence": "src.txt:1",
+         "proof_cmd": "grep -n alpha src.txt"},
+        {"id": "R-2", "verdict": "PASS", "evidence": ["src.txt:2"],
+         "proof_cmd": "grep -n beta src.txt"},
+    ])
+
+
+# -- done-mode cases (the completion-gate half was previously untested) -----------------
+
+@case("done: delivered run passes", 0, mode="done")
+def c_done_ok(d):
+    base_run_done(d)
+
+
+@case("done: a FAIL row means the work is unfinished", 1, "in a DONE job", mode="done")
+def c_done_fail_row(d):
+    base_run_done(d)
+    write_jsonl(os.path.join(d, "verdicts.jsonl"), [
+        {"id": "R-1", "verdict": "PASS", "evidence": ["src.txt:1"],
+         "proof_cmd": "grep -n alpha src.txt", "fix": "src.txt:1", "fix_verdict": "PASS"},
+        {"id": "R-2", "verdict": "FAIL", "evidence": ["src.txt:2"],
+         "proof_cmd": "grep -n beta src.txt"},
+    ])
+
+
+@case("done: duplicate scope ids cannot pad out --expect-scope-count", 1,
+      "duplicate scope id", mode="done")
+def c_scope_padding(d):
+    base_run_done(d)
+    write_jsonl(os.path.join(d, "scope.jsonl"),
+                [{"id": i, "claim": f"claim {i}"} for i in ("R-1", "R-2", "R-1", "R-2")])
+
+
+@case("done: dup-padded scope matching the frozen count still fails", 1,
+      "duplicate scope id", mode="done",
+      extra=["--expect-scope-count", "4"])
+def c_scope_padding_matched(d):
+    base_run_done(d)
+    write_jsonl(os.path.join(d, "scope.jsonl"),
+                [{"id": i, "claim": f"claim {i}"} for i in ("R-1", "R-2", "R-1", "R-2")])
+
+
+@case("done: one test cited for two rows via comment suffix is still one proof", 1,
+      "share the identical proof_cmd", mode="done")
+def c_comment_dedupe(d):
+    base_run_done(d)
+    write_jsonl(os.path.join(d, "verdicts.jsonl"), [
+        {"id": "R-1", "verdict": "PASS", "evidence": ["src.txt:1"],
+         "proof_cmd": "grep -n alpha src.txt  # R-1", "fix": "src.txt:1", "fix_verdict": "PASS"},
+        {"id": "R-2", "verdict": "PASS", "evidence": ["src.txt:2"],
+         "proof_cmd": "grep -n alpha src.txt  # R-2", "fix": "src.txt:1", "fix_verdict": "PASS"},
+    ])
+
+
+@case("done: FAIL->PASS with a cosmetic comment on the proof is still laundering", 1,
+      "same proof_cmd", mode="done")
+def c_comment_laundering(d):
+    base_run_done(d)
+    write_jsonl(os.path.join(d, "verdicts.jsonl"), [
+        {"id": "R-1", "verdict": "FAIL", "evidence": ["src.txt:1"],
+         "proof_cmd": "grep -n alpha src.txt"},
+        {"id": "R-1", "verdict": "PASS", "evidence": ["src.txt:1"],
+         "proof_cmd": "grep -n alpha src.txt  # re-verified", "fix": "src.txt:1",
+         "fix_verdict": "PASS"},
+        {"id": "R-2", "verdict": "PASS", "evidence": ["src.txt:2"],
+         "proof_cmd": "grep -n beta src.txt", "fix": "src.txt:1", "fix_verdict": "PASS"},
+    ])
+
+
 def main():
     failures = 0
-    for name, build, want_code, want_phrase in CASES:
+    for name, build, want_code, want_phrase, mode, extra in CASES:
         with tempfile.TemporaryDirectory() as d:
             base_run(d)
             build(d)
-            code, err = run_gate(d)
+            code, err = run_gate(d, mode, extra)
             ok = code == want_code and (want_phrase is None or want_phrase in err)
             print(f"{'PASS' if ok else 'FAIL'}  {name}")
             if not ok:

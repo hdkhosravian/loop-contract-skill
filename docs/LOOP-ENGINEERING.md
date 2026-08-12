@@ -49,7 +49,7 @@ you build a system that finds the path while running.
 
 | Part | What it is | Where `loop-contract` puts it |
 |---|---|---|
-| **State** | what survives between iterations | the spine on disk — `scope/ledger/verdicts/decisions/metrics.jsonl` |
+| **State** | what survives between iterations | the spine on disk — `scope/ledger/verdicts/decisions/metrics.jsonl` (+ the board — `brief/claims/bulletin/messages` — when several agents run) |
 | **Policy** | model + instructions; state → action | the contract itself, re-read each phase |
 | **Action space** | the tools it *may* use | the token policy's progressive disclosure |
 | **Environment** | where actions actually happen | the repo, the shell, the data |
@@ -61,9 +61,10 @@ get both wrong.
 
 ---
 
-## 3. The five failure modes
+## 3. The six failure modes
 
-These are the whole reason the discipline exists. Every section of a contract defeats one.
+These are the whole reason the discipline exists. Every section of a contract defeats one. The first
+five afflict a single loop; the sixth appears only when several loops run at once.
 
 **1 · Compounding error.** Multiply per-step reliability across a long chain and it collapses — the
 arithmetic is unforgiving well before step fifty. The answer is not a better model; it is **recovery**,
@@ -87,6 +88,15 @@ merely ran out of room.
 **5 · Silent failure — the dangerous one.** Absent an external check, an agent optimises for the
 *appearance* of completion. It says "done ✅" and it is not done. Without an oracle you have no way to
 know, and neither does it.
+
+**6 · Coordination loss — the multi-agent one.** Run several loops at once and a sixth mode appears
+*between* them: two workers decide the same convention differently, an item is done twice or silently
+dropped, a discovery never reaches the agent whose premise it invalidates, and two plausible verdicts
+contradict each other with nobody adjudicating. Failure-mode studies of multi-agent runs attribute
+roughly a third of failures to this class, and the largest single modes — step repetition, unawareness
+of termination — are coordination-*state* failures, not reasoning failures. The answer has the same
+shape as everything above: state on disk, not in messages — a board the gate can read. The evidence and
+the design are in [`AGENT-COORDINATION.md`](AGENT-COORDINATION.md).
 
 ---
 
@@ -160,6 +170,8 @@ Each rule in the skill is a consequence of something above — not a style prefe
 | Append-only spine, `PROGRESS.md` re-read each phase | §2 state, §3.4 — recitation defeats drift |
 | Termination in four kinds, not a step cap | §3.4 — a step cap alone permits circling |
 | Sub-agents for isolation, writes single-threaded | §2 action space; parallel writers make conflicting decisions |
+| Shared priors broadcast before a fan-out; ownership claimed; discoveries pulled from an append-only board | §3.6 — coordination loss; the board is state the gate can read |
+| Inter-agent messages typed, capped, and never load-bearing; contradictions adjudicated or the gate fails | §3.6 + §4 — delivery is unverifiable, so the verifier cannot be built on it |
 | Retro + ratified priors across runs | §5 — Loop 4 is where the advantage compounds |
 
 If you disagree with a rule, the productive argument is with the failure mode behind it.

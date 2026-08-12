@@ -43,7 +43,7 @@ Stop on the **first** of these. Never stop because you "feel done".
 |---|---|
 | SUCCESS (KNOWN) | <oracle-verifiable condition> AND `<completion gate command>` exits 0 |
 | SUCCESS (DONE) | every target change applied AND `<achievement oracle cmd, e.g. pytest tests/test_orders.py>` exits 0 AND `<pre-existing suite cmd>` exits 0 AND `<gate cmd> --mode done --scope <dir>/scope.jsonl --oracle-cmd "<achievement oracle>"` exits 0 (the script RUNS it — a green claim is not a green check). A ledger where every row is verdicted but the achievement oracle is still red is a **completed audit of an unfinished job**, not success. |
-| BUDGET | > <N> sub-agent spawns · OR > <N> tool calls in one phase · OR context > 60% at a phase boundary (compact, see §4) · OR **> <N> total tokens / <$N> cost ceiling** · OR **> <N> hours wall-clock**. Nearly every loop ships a step cap and nothing else; a step cap alone lets an expensive run burn a budget nobody set. Record spend and elapsed in `metrics.jsonl` at each phase boundary so the ceiling is checkable, not notional. |
+| BUDGET | > <N> sub-agent spawns · OR > <N> tool calls in one phase · OR context > 60% at a phase boundary (compact, see §4) · OR **> <N> total tokens / <$N> cost ceiling** · OR **> <N> hours wall-clock** · OR (multi-agent runs) **> <M> messages per agent** — derived from the job like the spawn ceiling, enforced by the gate's per-sender count. Nearly every loop ships a step cap and nothing else; a step cap alone lets an expensive run burn a budget nobody set. Record spend and elapsed in `metrics.jsonl` at each phase boundary so the ceiling is checkable, not notional. |
 | STALL | <unit> unresolved after 2 genuinely different attempts → mark BLOCKED with a reason, append, move on. If > <K> items in one phase land BLOCKED for the same reason, stop retrying rows individually — the phase's method is wrong, not the items; record the pattern in PROGRESS.md Lessons and either revise the approach or close the phase early. |
 <If the job writes/deletes/mutates real data outside a sandbox:>
 | APPROVAL | before the phase that performs the write: print the exact statement/diff/row-count about to be applied to PROGRESS.md, then STOP and wait for an explicit human "go" — this overrides the "don't ask" default below, which waives interpretation questions (§5), never authorization for an irreversible action |
@@ -161,7 +161,7 @@ checked task box — surfaced in the report's "marked done but not verified" sec
 # MISSION: <restate §0 in one line>
 ## Phase: P<n> — <name>
 ## Ledger: <total> | PASS <n> | PARTIAL <n> | FAIL <n> | BLOCKED <n> | OPEN <n>
-## Budget: spawns <n>/<ceiling> · context <n>%
+## Budget: spawns <n>/<ceiling> · context <n>% <· messages <n>/<cap>, multi-agent runs only>
 ## Next action: <one concrete step>
 ## Lessons (do not repeat these)
 - ...
